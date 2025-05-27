@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+
+<body>
+    <h1>LOGIN</h1>
+    <form id="loginForm">
+        Username <input type="text" name="username" id="username" /><br />
+        Password <input type="password" name="password" id="password" disabled /><br />
+        <button type="submit" id="loginButton" disabled>Login</button>
+    </form>
+    <script>
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const loginButton = document.getElementById('loginButton');
+        let hasShownUsernameAlert = false;
+
+        const validUsername = 'admin';
+        const validPassword = '123456';
+
+        usernameInput.addEventListener('input', function () {
+            if (usernameInput.value === validUsername) {
+                passwordInput.disabled = false;
+                loginButton.disabled = false;
+            } else {
+                passwordInput.disabled = true;
+                loginButton.disabled = true;
+            }
+        });
+        usernameInput.addEventListener('blur', function () {
+            if (usernameInput.value !== validUsername && !hasShownUsernameAlert) {
+                alert('Tên đăng nhập không đúng. Vui lòng nhập lại.');
+                hasShownUsernameAlert = true;
+                setTimeout(() => {
+                    usernameInput.focus();
+                    usernameInput.select();
+                    hasShownUsernameAlert = false;
+                }, 0);
+            }
+        });
+        document.getElementById('loginForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            if (password === '') {
+                alert('Vui lòng nhập mật khẩu!')
+            } else if (password !== validPassword) {
+                alert('Đăng nhập thất bại: Sai mật khẩu');
+            } else {
+                alert('Đăng nhập thành công!');
+                window.location.href = 'welcome.html';
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "pharmacos-server",
+  "version": "1.0.0",
+  "description": "pharmacos",
+  "homepage": "https://github.com/DucPPhan/pharmacos-server#readme",
+  "bugs": {
+    "url": "https://github.com/DucPPhan/pharmacos-server/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DucPPhan/pharmacos-server.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index"
+  }
+}
