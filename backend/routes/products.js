@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { Product } = require("../models/Product");
 const { ImageSearch, ProductSimilarity } = require("../models/AIModels");
-const { authorize } = require("../middleware/auth");
+const { authorize, authenticateToken } = require("../middleware/auth");
 
 /**
  * @swagger
@@ -258,15 +258,19 @@ router.get("/:id", async (req, res) => {
  *       403:
  *         description: Not authorized
  */
-router.post("/", authorize(["staff"]), async (req, res) => {
-  try {
-    const product = new Product(req.body);
-    await product.save();
-    res.status(201).json(product);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
+router.post(
+  "/",
+  [authenticateToken, authorize(["staff"])],
+  async (req, res) => {
+    try {
+      const product = new Product(req.body);
+      await product.save();
+      res.status(201).json(product);
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
   }
-});
+);
 
 /**
  * @swagger
@@ -359,19 +363,23 @@ router.post("/search/image", async (req, res) => {
  *       404:
  *         description: Product not found
  */
-router.put("/:id", authorize(["staff"]), async (req, res) => {
-  try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+router.put(
+  "/:id",
+  [authenticateToken, authorize(["staff"])],
+  async (req, res) => {
+    try {
+      const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+        new: true,
+      });
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      res.json(product);
+    } catch (error) {
+      res.status(400).json({ message: error.message });
     }
-    res.json(product);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
   }
-});
+);
 
 /**
  * @swagger
@@ -397,19 +405,23 @@ router.put("/:id", authorize(["staff"]), async (req, res) => {
  *       404:
  *         description: Product not found
  */
-router.delete("/:id", authorize(["staff"]), async (req, res) => {
-  try {
-    const product = await Product.findByIdAndDelete(req.params.id);
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+router.delete(
+  "/:id",
+  [authenticateToken, authorize(["staff"])],
+  async (req, res) => {
+    try {
+      const product = await Product.findByIdAndDelete(req.params.id);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      await ProductSimilarity.deleteMany({
+        $or: [{ productId: product._id }, { similarProductId: product._id }],
+      });
+      res.json({ message: "Product deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: error.message });
     }
-    await ProductSimilarity.deleteMany({
-      $or: [{ productId: product._id }, { similarProductId: product._id }],
-    });
-    res.json({ message: "Product deleted successfully" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
   }
-});
+);
 
 module.exports = router;
