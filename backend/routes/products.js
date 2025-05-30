@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { Product } = require("../models/Product");
+const Product = require("../models/Product");
 const { ImageSearch, ProductSimilarity } = require("../models/AIModels");
 const { authorize, authenticateToken } = require("../middleware/auth");
 
@@ -16,6 +16,7 @@ const { authorize, authenticateToken } = require("../middleware/auth");
  *         - skinGroup
  *         - brandId
  *         - categoryId
+ *         - price
  *       properties:
  *         name:
  *           type: string
@@ -36,6 +37,10 @@ const { authorize, authenticateToken } = require("../middleware/auth");
  *           type: string
  *         imageUrl:
  *           type: string
+ *         price:
+ *           type: number
+ *           minimum: 0
+ *           required: true
  *         stockQuantity:
  *           type: number
  *           minimum: 0
@@ -244,6 +249,20 @@ router.get("/:id", async (req, res) => {
  *         application/json:
  *           schema:
  *             $ref: '#/components/schemas/Product'
+ *           example:
+ *             name: "Gentle Skin Lotion"
+ *             function: "lotion"
+ *             skinGroup: "oily"
+ *             ageGroup: "18-25"
+ *             genderTarget: "female"
+ *             brandId: "683a0133c42af87de6a4f8ee"
+ *             categoryId: "683a01fcc42af87de6a4f8f2"
+ *             imageUrl: "https://example.com/image.jpg"
+ *             price: 299
+ *             stockQuantity: 150
+ *             aiFeatures: {
+ *               "recommendationScore": "8.5"
+ *             }
  *     responses:
  *       201:
  *         description: Product created successfully
@@ -263,7 +282,13 @@ router.post(
   [authenticateToken, authorize(["staff"])],
   async (req, res) => {
     try {
-      const product = new Product(req.body);
+      // Convert aiFeatures to Map format
+      const productData = {
+        ...req.body,
+        aiFeatures: new Map(Object.entries(req.body.aiFeatures || {})),
+      };
+
+      const product = new Product(productData);
       await product.save();
       res.status(201).json(product);
     } catch (error) {
