@@ -32,12 +32,25 @@ const productSchema = new mongoose.Schema(
       required: true,
     },
     imageUrl: String,
+    price: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
     stockQuantity: {
       type: Number,
       required: true,
       default: 0,
       min: 0,
     },
+    salesHistory: [
+      {
+        month: Number,
+        year: Number,
+        quantity: Number,
+        revenue: Number,
+      },
+    ],
     aiFeatures: {
       type: Map,
       of: String,

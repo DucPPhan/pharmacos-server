@@ -355,7 +355,7 @@ router.post("/resend-verification", async (req, res) => {
  * @swagger
  * /api/auth/create-admin:
  *   post:
- *     summary: Create initial admin account (only works if no admin exists)
+ *     summary: Create a new admin account
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -378,29 +378,10 @@ router.post("/resend-verification", async (req, res) => {
  *       201:
  *         description: Admin account created successfully
  *       400:
- *         description: Admin already exists or invalid input
+ *         description: Username already exists or invalid input
  */
 router.post("/create-admin", async (req, res) => {
   try {
-    // Check if admin exists in both Account and Admin collections
-    const existingAdminAccount = await Account.findOne({ role: "admin" });
-    const existingAdmin = await Admin.findOne();
-
-    // If both exist, return error
-    if (existingAdminAccount && existingAdmin) {
-      return res.status(400).json({
-        message: "Admin account already exists",
-      });
-    }
-
-    // Clean up orphaned records if they exist
-    if (existingAdminAccount) {
-      await Account.findByIdAndDelete(existingAdminAccount._id);
-    }
-    if (existingAdmin) {
-      await Admin.findByIdAndDelete(existingAdmin._id);
-    }
-
     const { username, password, name } = req.body;
 
     // Check if username already exists
@@ -416,6 +397,8 @@ router.post("/create-admin", async (req, res) => {
       username,
       password,
       role: "admin",
+      isVerified: true, // Admin accounts are pre-verified
+      status: "active",
     });
     await account.save();
 

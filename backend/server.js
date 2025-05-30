@@ -70,6 +70,7 @@ const productRoutes = require("./routes/products");
 const orderRoutes = require("./routes/orders");
 const aiRoutes = require("./routes/ai");
 const adminRoutes = require("./routes/admin");
+const staffRoutes = require("./routes/staff");
 
 // Use routes
 app.use("/api/auth", authRoutes);
@@ -78,6 +79,7 @@ app.use("/api/products", productRoutes); // Public access for products
 app.use("/api/orders", authenticateToken, orderRoutes);
 app.use("/api/ai", aiRoutes); // AI features
 app.use("/api/admin", authenticateToken, adminRoutes);
+app.use("/api/staff", authenticateToken, staffRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

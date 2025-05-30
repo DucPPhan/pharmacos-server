@@ -3,6 +3,8 @@ const router = express.Router();
 const Customer = require("../models/Customer");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const Account = require("../models/Account");
+const SaleStaff = require("../models/SaleStaff");
 const { authorize } = require("../middleware/auth");
 
 /**
@@ -189,187 +191,6 @@ router.get("/customers/:id", async (req, res) => {
 
 /**
  * @swagger
- * /api/admin/analytics/sales:
- *   get:
- *     summary: Get sales analytics
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: startDate
- *         schema:
- *           type: string
- *           format: date
- *       - in: query
- *         name: endDate
- *         schema:
- *           type: string
- *           format: date
- *     responses:
- *       200:
- *         description: Sales analytics data
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/SalesAnalytics'
- */
-router.get("/analytics/sales", async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-
-    const matchStage = {
-      status: "completed",
-    };
-
-    if (startDate && endDate) {
-      matchStage.orderDate = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      };
-    }
-
-    const salesAnalytics = await Order.aggregate([
-      { $match: matchStage },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$orderDate" },
-            month: { $month: "$orderDate" },
-          },
-          totalSales: { $sum: "$totalAmount" },
-          orderCount: { $sum: 1 },
-        },
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1 } },
-    ]);
-
-    const topProducts = await Order.aggregate([
-      { $match: matchStage },
-      {
-        $lookup: {
-          from: "orderdetails",
-          localField: "_id",
-          foreignField: "orderId",
-          as: "items",
-        },
-      },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: "$items.productId",
-          totalQuantity: { $sum: "$items.quantity" },
-          totalRevenue: {
-            $sum: { $multiply: ["$items.quantity", "$items.unitPrice"] },
-          },
-        },
-      },
-      { $sort: { totalQuantity: -1 } },
-      { $limit: 10 },
-      {
-        $lookup: {
-          from: "products",
-          localField: "_id",
-          foreignField: "_id",
-          as: "product",
-        },
-      },
-      { $unwind: "$product" },
-    ]);
-
-    res.json({
-      salesByMonth: salesAnalytics,
-      topSellingProducts: topProducts,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
- * /api/admin/analytics/products:
- *   get:
- *     summary: Get product performance analytics
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Product performance data
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 lowStockProducts:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Product'
- *                 noSalesProducts:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Product'
- *                 productSales:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       _id:
- *                         type: string
- *                       totalSales:
- *                         type: integer
- */
-router.get("/analytics/products", async (req, res) => {
-  try {
-    const lowStockProducts = await Product.find({
-      stockQuantity: { $lt: 10 },
-    }).populate("brandId", "name");
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const productSales = await Order.aggregate([
-      {
-        $match: {
-          orderDate: { $gte: thirtyDaysAgo },
-          status: "completed",
-        },
-      },
-      {
-        $lookup: {
-          from: "orderdetails",
-          localField: "_id",
-          foreignField: "orderId",
-          as: "items",
-        },
-      },
-      { $unwind: "$items" },
-      {
-        $group: {
-          _id: "$items.productId",
-          totalSales: { $sum: "$items.quantity" },
-        },
-      },
-    ]);
-
-    const soldProductIds = productSales.map((p) => p._id);
-    const noSalesProducts = await Product.find({
-      _id: { $nin: soldProductIds },
-    }).populate("brandId", "name");
-
-    res.json({
-      lowStockProducts,
-      noSalesProducts,
-      productSales,
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-/**
- * @swagger
  * /api/admin/customers/{id}/status:
  *   patch:
  *     summary: Update customer status
@@ -416,6 +237,295 @@ router.patch("/customers/:id/status", async (req, res) => {
     res.json(customer);
   } catch (error) {
     res.status(400).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/accounts:
+ *   get:
+ *     summary: Get all user accounts
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of user accounts
+ */
+router.get("/accounts", async (req, res) => {
+  try {
+    const accounts = await Account.find({ role: { $ne: "admin" } });
+    res.json(accounts);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/accounts/{id}/status:
+ *   patch:
+ *     summary: Lock or unlock user account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [active, locked]
+ */
+router.patch("/accounts/:id/status", async (req, res) => {
+  try {
+    const { status } = req.body;
+    const account = await Account.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    res.json(account);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     StaffResponse:
+ *       type: object
+ *       properties:
+ *         message:
+ *           type: string
+ *         staff:
+ *           type: object
+ *           properties:
+ *             _id:
+ *               type: string
+ *             name:
+ *               type: string
+ *             email:
+ *               type: string
+ *             username:
+ *               type: string
+ *             role:
+ *               type: string
+ *             accountId:
+ *               type: string
+ *             createdAt:
+ *               type: string
+ *               format: date-time
+ *             updatedAt:
+ *               type: string
+ *               format: date-time
+ *
+ * /api/admin/staff:
+ *   post:
+ *     summary: Create a new sale staff account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *               - email
+ *               - name
+ *             properties:
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               name:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Staff account created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/StaffResponse'
+ *       400:
+ *         description: Username/email already exists or invalid input
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ */
+router.post("/staff", async (req, res) => {
+  try {
+    const { username, password, email, name } = req.body;
+
+    console.log("Creating staff account with username:", username);
+
+    // Use escapeRegExp to handle special characters in username
+    const escapeRegExp = (string) => {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    };
+
+    // Check if username exists (case-insensitive)
+    const allAccounts = await Account.find();
+    console.log("All existing accounts:", JSON.stringify(allAccounts, null, 2));
+
+    const existingAccount = await Account.findOne({
+      username: { $regex: new RegExp(`^${escapeRegExp(username)}$`, "i") },
+    });
+    console.log("Found existing account:", existingAccount);
+
+    if (existingAccount) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    // Check if email exists (case-insensitive)
+    const existingStaff = await SaleStaff.findOne({
+      email: { $regex: new RegExp(`^${email}$`, "i") },
+    });
+    if (existingStaff) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
+
+    let staffAccount;
+    try {
+      // Create staff account
+      staffAccount = await Account.create({
+        username,
+        password,
+        role: "staff",
+        isVerified: true, // Staff accounts are pre-verified
+        status: "active",
+      });
+    } catch (error) {
+      // If account creation fails, return error
+      return res.status(400).json({ message: error.message });
+    }
+
+    let staffProfile;
+    try {
+      // Create staff profile
+      staffProfile = await SaleStaff.create({
+        name,
+        email,
+        accountId: staffAccount._id,
+      });
+    } catch (error) {
+      // If profile creation fails, delete the account and return error
+      await Account.findByIdAndDelete(staffAccount._id);
+      return res.status(400).json({ message: error.message });
+    }
+
+    const staffResponse = {
+      message: "Staff account created successfully",
+      staff: {
+        ...staffProfile.toObject(),
+        username: staffAccount.username,
+        role: staffAccount.role,
+        accountId: staffAccount._id,
+        createdAt: staffProfile.createdAt,
+        updatedAt: staffProfile.updatedAt,
+      },
+    };
+
+    res.status(201).json(staffResponse);
+  } catch (error) {
+    console.error("Error creating staff account:", error);
+    res.status(400).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/analytics/staff-performance:
+ *   get:
+ *     summary: Get sales staff performance analytics
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ */
+router.get("/analytics/staff-performance", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const matchStage = { status: "completed" };
+    if (startDate && endDate) {
+      matchStage.orderDate = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    const staffPerformance = await Order.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: "$staffId",
+          totalSales: { $sum: "$totalAmount" },
+          orderCount: { $sum: 1 },
+          averageOrderValue: { $avg: "$totalAmount" },
+        },
+      },
+      {
+        $lookup: {
+          from: "accounts",
+          localField: "_id",
+          foreignField: "_id",
+          as: "staffInfo",
+        },
+      },
+      { $unwind: "$staffInfo" },
+    ]);
+
+    res.json(staffPerformance);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 

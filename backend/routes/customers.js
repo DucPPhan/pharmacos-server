@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const Customer = require("../models/Customer");
+const Account = require("../models/Account");
+const bcrypt = require("bcryptjs");
 const { authorize } = require("../middleware/auth");
 
 /**
@@ -279,6 +281,62 @@ router.get("/purchase-history", authorize(["customer"]), async (req, res) => {
     res.json(orderDetails);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/customers/change-password:
+ *   put:
+ *     summary: Change customer password
+ *     tags: [Customers]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       400:
+ *         description: Invalid current password
+ *       401:
+ *         description: Not authenticated
+ */
+router.put("/change-password", authorize(["customer"]), async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    const account = await Account.findById(req.user.id);
+    if (!account) {
+      return res.status(404).json({ message: "Account not found" });
+    }
+
+    // Verify current password
+    const isValid = await account.comparePassword(currentPassword);
+    if (!isValid) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    // Update password
+    const salt = await bcrypt.genSalt(10);
+    account.password = await bcrypt.hash(newPassword, salt);
+    await account.save();
+
+    res.json({ message: "Password changed successfully" });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 });
 

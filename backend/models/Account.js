@@ -7,6 +7,8 @@ const accountSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
+      index: true,
+      collation: { locale: "en", strength: 2 }, // Case-insensitive index
     },
     password: {
       type: String,
@@ -16,6 +18,11 @@ const accountSchema = new mongoose.Schema(
       type: String,
       enum: ["admin", "staff", "customer"],
       required: true,
+    },
+    status: {
+      type: String,
+      enum: ["active", "locked"],
+      default: "active",
     },
     isVerified: {
       type: Boolean,
